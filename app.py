@@ -13,17 +13,17 @@ except ImportError as e:
     st.stop()
 
 st.set_page_config(layout="wide")
-st.title("📊 Instagram Usage & Lifestyle Dashboard")
+st.title("Instagram Usage & Lifestyle Dashboard")
 
 # --- Sidebar for Controls ---
 with st.sidebar:
     st.header("Data Input")
     # Option A: File Uploader
     uploaded_file = st.file_uploader("Upload your CSV", type=['csv'])
-    
+
     # Option B: Use the original file (you'll need to adjust the path for Linux)
     use_sample = st.checkbox("Use sample dataset path")
-    
+
     if use_sample:
         # You MUST update this path to point to your actual CSV file on Arch Linux
         file_path = "/home/prakhar/Documents/GitHub/eda-project-fork/instagram_users_lifestyle.csv"
@@ -51,10 +51,10 @@ with tab1:
         # Use our function
         info_text = eda.get_basic_info(df)
         st.text_area("Data Info", info_text, height=400)
-    
+
     st.subheader("Interactive Data Preview")
     num_rows = st.slider("Rows to show", 5, 50, 10)
-    st.dataframe(df.head(num_rows), use_container_width=True)
+    st.dataframe(df.head(num_rows), width=True)
 
 with tab2:
     st.header("Visualizations")
@@ -65,11 +65,12 @@ with tab2:
             "Daily Activity Distribution",
             "Activity by Gender",
             "Reels Watched by Activity",
-            "Activity by Employment",
-            # ... add all other plot names
+            "Instagram Activity by Age",
+            "DMs sent by Relationship Status",
+            # ... add all other plot names here
         ]
     )
-    
+
     if plot_choice == "Daily Activity Distribution":
         fig = eda.plot_activity_distribution(df)
         if fig:
@@ -78,6 +79,24 @@ with tab2:
             st.warning("Required columns not found in data.")
     elif plot_choice == "Activity by Gender":
         fig = eda.plot_activity_by_gender(df)
+        if fig:
+            st.pyplot(fig)
+        else:
+            st.warning("Required columns not found in data.")
+    elif plot_choice == "Reels Watched by Activity":
+        fig = eda.plot_reels_by_activity(df)
+        if fig:
+            st.pyplot(fig)
+        else:
+            st.warning("Required columns not found in data.")
+    elif plot_choice == "Instagram Activity by Age":
+        fig = eda.plot_activity_by_age(df)
+        if fig:
+            st.pyplot(fig)
+        else:
+            st.warning("Required columns not found in data.")
+    elif plot_choice == "DMs sent by Relationship Status":
+        fig = eda.plot_dms_by_relationship_status(df)
         if fig:
             st.pyplot(fig)
         else:
