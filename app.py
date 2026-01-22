@@ -47,14 +47,175 @@ tab1, tab2, tab3 = st.tabs(["Data Overview", "Visualizations", "Correlations"])
 
 with tab1:
     st.header("Dataset Overview")
-    if st.button("Show Basic Information"):
-        # Use our function
-        info_text = eda.get_basic_info(df)
-        st.text_area("Data Info", info_text, height=400)
-
-    st.subheader("Interactive Data Preview")
-    num_rows = st.slider("Rows to show", 5, 50, 10)
-    st.dataframe(df.head(num_rows), width=True)
+    
+    # Quick stats at the top
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Total Rows", df.shape[0])
+    with col2:
+        st.metric("Total Columns", df.shape[1])
+    with col3:
+        numeric_cols = df.select_dtypes(include=[np.number]).shape[1]
+        st.metric("Numeric Columns", numeric_cols)
+    with col4:
+        missing_total = df.isna().sum().sum()
+        st.metric("Missing Values", missing_total)
+    
+    # Interactive controls in an expander
+    with st.expander("📊 Detailed Data Explorer", expanded=True):
+        # Row/Column selection
+        col_a, col_b = st.columns(2)
+        with col_a:
+            preview_rows = st.slider(
+                "Rows to preview", 
+                min_value=5, 
+                max_value=min(100, len(df)),  # Don't exceed 100 rows
+                value=10,
+                help="Large datasets: keep this small for faster preview"
+            )
+        
+        with col_b:
+            # Let user select specific columns to show
+            all_columns = df.columns.tolist()
+            default_cols = all_columns[:min(10, len(all_columns))]  # First 10 columns
+            selected_columns = st.multiselect(
+                "Columns to display",
+                all_columns,
+                default=default_cols,
+                help="Select specific columns to reduce memory usage"
+            )
+        
+        # Show data preview
+        st.subheader("Data Preview")
+        if selected_columns:
+            try:
+                # Use Streamlit's dataframe with height limit
+                st.dataframe(
+                    df[selected_columns].head(preview_rows),
+                    use_container_width=True,
+                    height=400
+                )
+                
+                # Show a sample warning for large datasets
+                if len(df) > 10000:
+                    st.info(f"Showing first {preview_rows} rows of {len(df):,} total rows. Data has been sampled for performance.")
+            except Exception as e:
+                st.error(f"Error displaying data: {e}")
+                # Fallback: show just the first few rows without selection
+                st.dataframe(df.head(5))
+        else:
+            st.warning("Please select at least one column to display")
+    
+    # Basic Information in an expander
+    with st.expander("📋 Basic Dataset Information", expanded=False):
+        if st.button("Generate Summary", key="summary_btn"):
+            with st.spinner("Processing dataset info..."):
+                try:
+                    # Use caching for expensive operations
+                    @st.cache_data
+                    def get_summary_stats(_df):
+                        return {
+                            'dtypes': _df.dtypes,
+                            'missing': _df.isna().sum(),
+                            'numeric_summary': _df.describe() if not _df.select_dtypes(include=[np.number]).empty else None
+                        }
+                    
+                    stats = get_summary_stats(df)
+                    
+                    # Display in columns
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.write("**Data Types:**")
+                        dtype_df = pd.DataFrame(stats['dtypes'].reset_index())
+                        dtype_df.columns = ['Column', 'Data Type']
+                        st.dataframe(dtype_df, height=300, use_container_width=True)
+                    
+                    with col2:
+                        st.write("**Missing Values:**")
+                        missing_df = pd.DataFrame(stats['missing'][stats['missing'] > 0].reset_index())
+                        if not missing_df.empty:
+                            missing_df.columns = ['Column', 'Missing Count']
+                            st.dataframe(missing_df, height=300, use_container_width=True)
+                            # Visualize missing values
+                            st.bar_chart(missing_df.set_index('Column'))
+                        else:
+                            st.success("✅ No missing values!")
+                    
+                    # Show numeric summary if available
+                    if stats['numeric_summary'] is not None:
+                        st.write("**Numeric Columns Summary:**")
+                        st.dataframe(stats['numeric_summary'], use_container_width=True)
+                
+                except Exception as e:
+                    st.error(f"Error generating summary: {e}")
+    
+    # Column Explorer
+    with st.expander("🔍 Column Explorer", expanded=False):
+        selected_col = st.selectbox("Select a column to explore:", df.columns)
+        
+        if selected_col:
+            col_data = df[selected_col]
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.write(f"**Statistics for `{selected_col}`**")
+                st.write(f"Data type: `{col_data.dtype}`")
+                st.write(f"Unique values: `{col_data.nunique()}`")
+                st.write(f"Missing values: `{col_data.isna().sum()}`")
+                
+                if pd.api.types.is_numeric_dtype(col_data):
+                    st.write(f"Min: `{col_data.min():.2f}`")
+                    st.write(f"Max: `{col_data.max():.2f}`")
+                    st.write(f"Mean: `{col_data.mean():.2f}`")
+                    st.write(f"Std Dev: `{col_data.std():.2f}`")
+            
+            with col2:
+                # Quick visualization based on data type
+                if pd.api.types.is_numeric_dtype(col_data):
+                    # For large datasets, sample the data
+                    if len(col_data) > 10000:
+                        sample_data = col_data.sample(10000, random_state=42)
+                        st.write(f"*Showing 10,000 sample points of {len(col_data):,} total*")
+                    else:
+                        sample_data = col_data
+                    
+                    fig, ax = plt.subplots(figsize=(8, 4))
+                    ax.hist(sample_data.dropna(), bins=30, edgecolor='black')
+                    ax.set_title(f"Distribution of {selected_col}")
+                    ax.set_xlabel(selected_col)
+                    ax.set_ylabel("Frequency")
+                    st.pyplot(fig)
+                elif pd.api.types.is_categorical_dtype(col_data) or col_data.nunique() < 20:
+                    # Show value counts for categorical
+                    value_counts = col_data.value_counts().head(10)
+                    st.bar_chart(value_counts)
+    
+    # Data Quality Check
+    with st.expander("✅ Data Quality Check", expanded=False):
+        quality_issues = []
+        
+        # Check for columns with high missing percentage
+        missing_pct = (df.isna().sum() / len(df)) * 100
+        high_missing = missing_pct[missing_pct > 50].index.tolist()
+        if high_missing:
+            quality_issues.append(f"⚠️ {len(high_missing)} columns have >50% missing values")
+        
+        # Check for constant columns
+        constant_cols = [col for col in df.columns if df[col].nunique() == 1]
+        if constant_cols:
+            quality_issues.append(f"⚠️ {len(constant_cols)} constant columns (single value)")
+        
+        # Check for duplicate rows
+        duplicates = df.duplicated().sum()
+        if duplicates > 0:
+            quality_issues.append(f"⚠️ {duplicates} duplicate rows found")
+        
+        if quality_issues:
+            for issue in quality_issues:
+                st.warning(issue)
+        else:
+            st.success("✅ No major data quality issues detected")
 
 with tab2:
     st.header("Visualizations")
