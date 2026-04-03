@@ -9,6 +9,9 @@ mpHands = mp.solutions.hands
 hands = mpHands.Hands()
 mpDraw = mp.solutions.drawing_utils
 
+pTime=0
+cTime=0
+
 
 
 
@@ -25,7 +28,11 @@ while True:
         for _handLms in results.multi_hand_landmarks:
             mpDraw.draw_landmarks(img , _handLms, mpHands.HAND_CONNECTIONS)
 
+    cTime = time.time()
+    fps = 1/(cTime-pTime)
+    pTime = cTime
 
+    cv2.putText(img, str(int(fps)),(10,70), cv2.FONT_HERSHEY_COMPLEX,3,(255,0,255), 3)
 
     cv2.imshow("image" , img)
     if cv2.waitKey(1) & 0XFF == ord('q'):
